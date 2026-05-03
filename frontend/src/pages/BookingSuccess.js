@@ -31,10 +31,14 @@ const BookingSuccess = () => {
   const handleWhatsAppShare = () => {
     if (!booking) return;
     
+    const departureInfo = booking.departure_date 
+      ? `\nDeparture: ${new Date(booking.departure_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}` 
+      : '';
+    
     const message = `🏔 Booking Confirmed - Sahyadri Souls Trek\n\n` +
       `Trek: ${booking.trek_name}\n` +
       `Name: ${booking.customer_name}\n` +
-      `Members: ${booking.num_members}\n` +
+      `Members: ${booking.num_members}${departureInfo}\n` +
       `Amount Paid: ₹${booking.total_amount}\n` +
       `Booking ID: ${booking.id}\n\n` +
       `We're excited to have you on this adventure!`;
@@ -128,6 +132,20 @@ const BookingSuccess = () => {
               <span className="text-text-muted">Number of Members</span>
               <span className="font-semibold">{booking.num_members}</span>
             </div>
+            
+            {booking.departure_date && (
+              <div className="flex justify-between py-3 border-b border-border">
+                <span className="text-text-muted">Departure Date</span>
+                <span className="font-semibold">
+                  {new Date(booking.departure_date).toLocaleDateString('en-IN', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+            )}
             
             <div className="flex justify-between py-3">
               <span className="text-text-muted">Total Amount Paid</span>

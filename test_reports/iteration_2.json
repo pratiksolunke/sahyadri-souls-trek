@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 2 testing for new features: image upload, departure dates, admin auth middleware, email on payment. Backend: 22/22 pytest passed (100%). All admin endpoints now correctly require Authorization Bearer token (return 401 without it). Trek model returns departure_dates array (seeded with real dates). POST /api/bookings/create-order accepts and persists departure_date. POST /api/upload works (admin-auth, rejects non-images, stores via Emergent Object Storage). GET /api/files/{id} returns the original image (200, image/png). Frontend: Admin login -> dashboard shows stats; Add Trek modal has Departure Dates textarea and Upload Images section (both visible). Image upload from admin dashboard returns 200 with file_id. Trek detail page shows 'Upcoming Departures' with 4 clickable dates. Booking form shows departure date select dropdown populated with trek dates, selection persists through create-order=200. Bookings tab in admin shows departure_date column. ONE BLOCKING ISSUE: Resend rejects emails because SENDER_EMAIL=sahyadri.souls@gmail.com is not a verified domain on Resend ('The gmail.com domain is not verified'). Payment verification still returns 200 because email send is wrapped in try/except, but no booking confirmation emails will be delivered.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/send-test-email and /api/bookings/verify-payment email send", "issue": "Resend returns 403: 'The gmail.com domain is not verified. Please add and verify your domain on https://resend.com/domains'. Using from=sahyadri.souls@gmail.com is not allowed by Resend. Booking confirmation emails are silently dropped (exception caught in try/except, payment still completes). Fix: either (1) use SENDER_EMAIL=onboarding@resend.dev for testing, or (2) verify a custom domain on Resend (e.g., mail.sahyadrisouls.com) and use no-reply@<verified-domain>. Gmail.com can never be used as a from-address on Resend.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "/api/files/{file_id}", "issue": "Works correctly (200 + image/png). On HEAD request returns 405 Method Not Allowed (no HEAD handler). Not blocking - GET works."},
+      {"endpoint": "general", "issue": "Deprecated @app.on_event('startup'/'shutdown') - should migrate to FastAPI lifespan handler."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "CRITICAL: Change SENDER_EMAIL in backend/.env to 'onboarding@resend.dev' (Resend's test-mode sender) or verify a custom domain on Resend and use an address on that domain. Current value 'sahyadri.souls@gmail.com' causes Resend to reject every send with a 403. Booking confirmation emails are NOT being delivered to customers today.",
+    "After fixing SENDER_EMAIL, retest POST /api/send-test-email and the full booking+verify-payment flow to confirm email delivery (check Resend dashboard for the email_id).",
+    "(Minor) Migrate @app.on_event to FastAPI lifespan."
+  ],
+  "critical_code_review_comments": [
+    "Admin auth now enforced on POST/PUT/DELETE /api/treks, POST /api/upload, GET /api/bookings, GET /api/admin/stats, PUT /api/reviews/{id}/approve, DELETE /api/reviews/{id}, POST /api/send-test-email - security gap from iteration 1 is fixed.",
+    "Admin tokens are stored in an in-memory set (admin_tokens). These will be lost on backend restart, forcing re-login. Consider JWT or DB-backed tokens for persistence.",
+    "send_booking_confirmation_email swallows all exceptions and just logs - customers will never know their email failed. Consider surfacing a soft warning in the verify-payment response when email_sent=false so the UI can say 'Payment successful - email will be sent shortly'.",
+    "/api/upload file storage records include `is_deleted` flag but no DELETE /api/files/{id} endpoint exists to set it.",
+    "Upload endpoint has 5MB limit (good) and whitelists image types (good). storage_key is cached at module level but no refresh/retry on auth expiry."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (22/22 pytest; 1 integration issue with Resend domain verification)", "frontend": "100% - all new UI features work"},
+  "test_credentials": "admin / admin123 (verified working). Admin token obtained via POST /api/admin/login returns 'admin_token_<uuid>' and must be sent as 'Authorization: Bearer <token>' on protected routes.",
+  "seed_data_creation": "Created a few TEST_ bookings and one uploaded test PNG (file_id=701fef84-...). Trek CRUD tests self-cleanup. No seed/production data modified.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest at /app/backend/tests/backend_test.py (22 tests, all pass). Covers: trek read (+departure_dates), admin auth (401 without token, 200 with), trek CRUD with departure_dates roundtrip, booking create with departure_date persistence, image upload (/api/upload) + file retrieval (/api/files/{id}), content-type validation. Frontend verified visually: trek detail departure picker, admin image upload returning 200, booking bookings tab showing departure_date. Only remaining work: fix SENDER_EMAIL to a Resend-allowed address and retest email delivery via /api/send-test-email.",
+  "rca_of_the_issue": "Email RCA: Resend API rejects any 'from' address on an unverified domain. gmail.com cannot be verified by third-parties. The backend sends with from='Sahyadri Souls Trek <sahyadri.souls@gmail.com>' which Resend refuses with HTTP 403 and message 'The gmail.com domain is not verified'. Mitigation: (a) quick fix for dev/test: set SENDER_EMAIL=onboarding@resend.dev, (b) production: verify a domain owned by the business on resend.com/domains and use an address on that domain."
+}

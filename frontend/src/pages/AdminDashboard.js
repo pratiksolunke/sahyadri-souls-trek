@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Check, X, TrendingUp, Users, Mountain, DollarSign, LogOut } from 'lucide-react';
+import { Plus, Edit, Trash2, Check, X, TrendingUp, Users, Mountain, DollarSign, LogOut, Upload, Calendar, Image } from 'lucide-react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -22,6 +22,8 @@ const AdminDashboard = () => {
   const [reviews, setReviews] = useState([]);
   const [isAddTrekOpen, setIsAddTrekOpen] = useState(false);
   const [editingTrek, setEditingTrek] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState([]);
   
   const [trekForm, setTrekForm] = useState({
     name: '',
@@ -35,6 +37,7 @@ const AdminDashboard = () => {
     excluded: '',
     images: '',
     max_group_size: 15,
+    departure_dates: '',
   });
 
   useEffect(() => {
@@ -115,8 +118,46 @@ const AdminDashboard = () => {
       excluded: '',
       images: '',
       max_group_size: 15,
+      departure_dates: '',
     });
     setEditingTrek(null);
+    setUploadedImages([]);
+  };
+
+  const handleImageUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploading(true);
+    const newImages = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const formData = new FormData();
+      formData.append('file', files[i]);
+      
+      try {
+        const response = await axios.post(`${API}/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+          }
+        });
+        const imageUrl = `${BACKEND_URL}${response.data.url}`;
+        newImages.push(imageUrl);
+        toast.success(`Uploaded: ${files[i].name}`);
+      } catch (error) {
+        toast.error(`Failed to upload: ${files[i].name}`);
+      }
+    }
+    
+    setUploadedImages(prev => [...prev, ...newImages]);
+    // Also add to the images text area
+    const currentImages = trekForm.images ? trekForm.images.split('\n').filter(i => i.trim()) : [];
+    const allImages = [...currentImages, ...newImages];
+    setTrekForm(prev => ({ ...prev, images: allImages.join('\n') }));
+    
+    setUploading(false);
+    e.target.value = '';
   };
 
   const handleAddTrek = async (e) => {
@@ -130,6 +171,7 @@ const AdminDashboard = () => {
       included: trekForm.included.split('\n').filter(i => i.trim()),
       excluded: trekForm.excluded.split('\n').filter(e => e.trim()),
       images: trekForm.images.split('\n').filter(img => img.trim()),
+      departure_dates: trekForm.departure_dates.split('\n').filter(d => d.trim()),
     };
 
     try {
@@ -164,6 +206,7 @@ const AdminDashboard = () => {
       excluded: trek.excluded.join('\n'),
       images: trek.images.join('\n'),
       max_group_size: trek.max_group_size,
+      departure_dates: (trek.departure_dates || []).join('\n'),
     });
     setIsAddTrekOpen(true);
   };
@@ -274,7 +317,7 @@ const AdminDashboard = () => {
             <div className="bg-white border border-border rounded-md p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold">Manage Treks</h2>
-                <Dialog open={isAddTrekOpen} onOpenChange={setIsAddTrekOpen}>
+                <Dialog open={isAddTrekOpen} onOpenChange={(open) => { setIsAddTrekOpen(open); if (!open) resetTrekForm(); }}>
                   <DialogTrigger asChild>
                     <Button className="bg-primary hover:bg-primary-hover" data-testid="add-trek-button">
                       <Plus className="mr-2" size={18} />
@@ -293,6 +336,7 @@ const AdminDashboard = () => {
                             value={trekForm.name}
                             onChange={(e) => handleTrekFormChange('name', e.target.value)}
                             required
+                            data-testid="trek-form-name"
                           />
                         </div>
                         <div>
@@ -301,6 +345,7 @@ const AdminDashboard = () => {
                             value={trekForm.location}
                             onChange={(e) => handleTrekFormChange('location', e.target.value)}
                             required
+                            data-testid="trek-form-location"
                           />
                         </div>
                       </div>
@@ -394,8 +439,58 @@ const AdminDashboard = () => {
                         />
                       </div>
 
+                      {/* Departure Dates */}
                       <div>
-                        <Label>Image URLs (one per line) *</Label>
+                        <Label className="flex items-center gap-2">
+                          <Calendar size={16} className="text-primary" />
+                          Departure Dates (one per line, format: YYYY-MM-DD)
+                        </Label>
+                        <Textarea
+                          rows={3}
+                          placeholder={"2026-03-15\n2026-03-22\n2026-04-05"}
+                          value={trekForm.departure_dates}
+                          onChange={(e) => handleTrekFormChange('departure_dates', e.target.value)}
+                          data-testid="trek-form-dates"
+                        />
+                        <p className="text-xs text-text-muted mt-1">Customers will select from these dates when booking</p>
+                      </div>
+
+                      {/* Image Upload */}
+                      <div>
+                        <Label className="flex items-center gap-2">
+                          <Image size={16} className="text-primary" />
+                          Upload Images
+                        </Label>
+                        <div className="border-2 border-dashed border-border rounded-md p-4 mt-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleImageUpload}
+                            className="hidden"
+                            id="image-upload"
+                            data-testid="image-upload-input"
+                          />
+                          <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                            <Upload size={24} className="text-text-muted" />
+                            <span className="text-sm text-text-muted">
+                              {uploading ? 'Uploading...' : 'Click to upload images (max 5MB each)'}
+                            </span>
+                          </label>
+                        </div>
+                        {uploadedImages.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {uploadedImages.map((img, i) => (
+                              <div key={i} className="relative w-16 h-16 rounded overflow-hidden border">
+                                <img src={img} alt={`Upload ${i + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label>Image URLs (one per line) - uploaded images are auto-added above</Label>
                         <Textarea
                           rows={3}
                           placeholder="Enter each image URL on a new line"
@@ -406,7 +501,7 @@ const AdminDashboard = () => {
                       </div>
 
                       <div className="flex gap-2 pt-4">
-                        <Button type="submit" className="flex-1" data-testid="save-trek-button">
+                        <Button type="submit" className="flex-1 bg-primary hover:bg-primary-hover" data-testid="save-trek-button">
                           {editingTrek ? 'Update Trek' : 'Add Trek'}
                         </Button>
                         <Button
@@ -443,6 +538,12 @@ const AdminDashboard = () => {
                         <p className="text-sm text-text-muted">
                           {trek.location} • {trek.duration} • ₹{trek.price}
                         </p>
+                        {trek.departure_dates && trek.departure_dates.length > 0 && (
+                          <p className="text-xs text-primary mt-1">
+                            <Calendar size={12} className="inline mr-1" />
+                            {trek.departure_dates.length} departure dates set
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -479,10 +580,11 @@ const AdminDashboard = () => {
                     <tr>
                       <th className="text-left p-3">Customer</th>
                       <th className="text-left p-3">Trek</th>
+                      <th className="text-left p-3">Date</th>
                       <th className="text-left p-3">Members</th>
                       <th className="text-left p-3">Amount</th>
                       <th className="text-left p-3">Status</th>
-                      <th className="text-left p-3">Date</th>
+                      <th className="text-left p-3">Booked On</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -495,6 +597,7 @@ const AdminDashboard = () => {
                           </div>
                         </td>
                         <td className="p-3">{booking.trek_name}</td>
+                        <td className="p-3 text-sm">{booking.departure_date || '-'}</td>
                         <td className="p-3">{booking.num_members}</td>
                         <td className="p-3">₹{booking.total_amount}</td>
                         <td className="p-3">

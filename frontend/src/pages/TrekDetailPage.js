@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MapPin, Clock, Users, Check, X, Star } from 'lucide-react';
+import { MapPin, Clock, Users, Check, X, Star, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import axios from 'axios';
 
@@ -26,6 +27,7 @@ const TrekDetailPage = () => {
     customer_phone: '',
     age: '',
     num_members: 1,
+    departure_date: '',
   });
 
   useEffect(() => {
@@ -83,6 +85,7 @@ const TrekDetailPage = () => {
         age: parseInt(bookingData.age),
         num_members: parseInt(bookingData.num_members),
         total_amount: total_amount,
+        departure_date: bookingData.departure_date || null,
       });
 
       const { order_id, amount, key_id, booking_id } = response.data;
@@ -218,6 +221,36 @@ const TrekDetailPage = () => {
                 <h2 className="text-2xl font-semibold mb-4">About This Trek</h2>
                 <p className="text-text-muted leading-relaxed" data-testid="trek-description">{trek.description}</p>
               </div>
+
+              {/* Departure Dates */}
+              {trek.departure_dates && trek.departure_dates.length > 0 && (
+                <div className="bg-white border border-border rounded-md p-6 mb-8" data-testid="departure-dates-section">
+                  <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                    <Calendar size={24} className="text-primary" />
+                    Upcoming Departures
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {trek.departure_dates.map((date, index) => (
+                      <div
+                        key={index}
+                        className="bg-primary/5 border border-primary/20 rounded-md px-4 py-3 text-center"
+                        data-testid={`departure-date-${index}`}
+                      >
+                        <p className="font-semibold text-secondary">
+                          {new Date(date).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </p>
+                        <p className="text-xs text-text-muted">
+                          {new Date(date).toLocaleDateString('en-IN', { weekday: 'long' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Highlights */}
               {trek.highlights && trek.highlights.length > 0 && (
@@ -371,6 +404,36 @@ const TrekDetailPage = () => {
                         data-testid="input-members"
                       />
                     </div>
+
+                    {/* Departure Date Selection */}
+                    {trek.departure_dates && trek.departure_dates.length > 0 && (
+                      <div>
+                        <Label htmlFor="departure_date" className="flex items-center gap-2">
+                          <Calendar size={16} className="text-primary" />
+                          Select Departure Date *
+                        </Label>
+                        <Select
+                          value={bookingData.departure_date}
+                          onValueChange={(value) => setBookingData(prev => ({ ...prev, departure_date: value }))}
+                        >
+                          <SelectTrigger data-testid="select-departure-date">
+                            <SelectValue placeholder="Choose a date" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {trek.departure_dates.map((date) => (
+                              <SelectItem key={date} value={date}>
+                                {new Date(date).toLocaleDateString('en-IN', {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   <div className="border-t border-border mt-6 pt-6">
