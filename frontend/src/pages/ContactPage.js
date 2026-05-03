@@ -41,9 +41,9 @@ const ContactPage = () => {
     },
     {
       icon: Phone,
-      title: 'Call Us',
-      content: '+91 98765 43210',
-      link: 'tel:+919876543210',
+      title: 'Call / WhatsApp',
+      content: '+91 75889 17768',
+      link: 'tel:+917588917768',
     },
     {
       icon: Mail,

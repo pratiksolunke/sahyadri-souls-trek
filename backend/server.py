@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Depends, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -24,8 +24,19 @@ razorpay_key_id = os.environ.get('RAZORPAY_KEY_ID', 'test_key')
 razorpay_key_secret = os.environ.get('RAZORPAY_KEY_SECRET', 'test_secret')
 try:
     razorpay_client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
-except:
+except Exception:
     razorpay_client = None
+
+# Admin token storage
+admin_tokens = set()
+
+async def verify_admin(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "")
+    if token not in admin_tokens:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return token
 
 # Create the main app
 app = FastAPI()
@@ -141,7 +152,7 @@ async def get_trek(trek_id: str):
     return trek
 
 @api_router.post("/treks", response_model=Trek)
-async def create_trek(trek_input: TrekCreate):
+async def create_trek(trek_input: TrekCreate, token: str = Depends(verify_admin)):
     trek_dict = trek_input.model_dump()
     trek_obj = Trek(**trek_dict)
     doc = trek_obj.model_dump()
@@ -150,7 +161,7 @@ async def create_trek(trek_input: TrekCreate):
     return trek_obj
 
 @api_router.put("/treks/{trek_id}", response_model=Trek)
-async def update_trek(trek_id: str, trek_input: TrekCreate):
+async def update_trek(trek_id: str, trek_input: TrekCreate, token: str = Depends(verify_admin)):
     trek_dict = trek_input.model_dump()
     result = await db.treks.update_one(
         {"id": trek_id},
@@ -161,7 +172,7 @@ async def update_trek(trek_id: str, trek_input: TrekCreate):
     return await get_trek(trek_id)
 
 @api_router.delete("/treks/{trek_id}")
-async def delete_trek(trek_id: str):
+async def delete_trek(trek_id: str, token: str = Depends(verify_admin)):
     result = await db.treks.delete_one({"id": trek_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Trek not found")
@@ -243,7 +254,7 @@ async def verify_payment(payment_data: PaymentVerification):
     return {"message": "Payment verified successfully", "booking_id": payment_data.booking_id}
 
 @api_router.get("/bookings", response_model=List[Booking])
-async def get_bookings():
+async def get_bookings(token: str = Depends(verify_admin)):
     bookings = await db.bookings.find({}, {"_id": 0}).to_list(1000)
     for booking in bookings:
         if isinstance(booking.get('booking_date'), str):
@@ -294,7 +305,7 @@ async def approve_review(review_id: str):
     return {"message": "Review approved successfully"}
 
 @api_router.delete("/reviews/{review_id}")
-async def delete_review(review_id: str):
+async def delete_review(review_id: str, token: str = Depends(verify_admin)):
     result = await db.reviews.delete_one({"id": review_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -307,12 +318,14 @@ async def admin_login(credentials: AdminLogin):
     admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
     
     if credentials.username == admin_username and credentials.password == admin_password:
-        return {"message": "Login successful", "token": "admin_token_" + str(uuid.uuid4())}
+        token = "admin_token_" + str(uuid.uuid4())
+        admin_tokens.add(token)
+        return {"message": "Login successful", "token": token}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 # Stats Route for Admin
 @api_router.get("/admin/stats")
-async def get_stats():
+async def get_stats(token: str = Depends(verify_admin)):
     total_treks = await db.treks.count_documents({})
     total_bookings = await db.bookings.count_documents({})
     completed_bookings = await db.bookings.count_documents({"payment_status": "completed"})
@@ -351,4 +364,4 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    client.close()()

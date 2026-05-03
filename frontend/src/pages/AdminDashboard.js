@@ -50,11 +50,16 @@ const AdminDashboard = () => {
     fetchReviews();
   }, []);
 
+  const getAuthHeaders = () => ({
+    headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+  });
+
   const fetchStats = async () => {
     try {
-      const response = await axios.get(`${API}/admin/stats`);
+      const response = await axios.get(`${API}/admin/stats`, getAuthHeaders());
       setStats(response.data);
     } catch (error) {
+      if (error.response?.status === 401) { navigate('/admin/login'); return; }
       console.error('Error fetching stats:', error);
     }
   };
@@ -70,9 +75,10 @@ const AdminDashboard = () => {
 
   const fetchBookings = async () => {
     try {
-      const response = await axios.get(`${API}/bookings`);
+      const response = await axios.get(`${API}/bookings`, getAuthHeaders());
       setBookings(response.data);
     } catch (error) {
+      if (error.response?.status === 401) { navigate('/admin/login'); return; }
       console.error('Error fetching bookings:', error);
     }
   };
@@ -128,10 +134,10 @@ const AdminDashboard = () => {
 
     try {
       if (editingTrek) {
-        await axios.put(`${API}/treks/${editingTrek.id}`, trekData);
+        await axios.put(`${API}/treks/${editingTrek.id}`, trekData, getAuthHeaders());
         toast.success('Trek updated successfully');
       } else {
-        await axios.post(`${API}/treks`, trekData);
+        await axios.post(`${API}/treks`, trekData, getAuthHeaders());
         toast.success('Trek added successfully');
       }
       
@@ -166,7 +172,7 @@ const AdminDashboard = () => {
     if (!window.confirm('Are you sure you want to delete this trek?')) return;
     
     try {
-      await axios.delete(`${API}/treks/${trekId}`);
+      await axios.delete(`${API}/treks/${trekId}`, getAuthHeaders());
       toast.success('Trek deleted successfully');
       fetchTreks();
       fetchStats();
@@ -177,7 +183,7 @@ const AdminDashboard = () => {
 
   const handleApproveReview = async (reviewId) => {
     try {
-      await axios.put(`${API}/reviews/${reviewId}/approve`);
+      await axios.put(`${API}/reviews/${reviewId}/approve`, {}, getAuthHeaders());
       toast.success('Review approved');
       fetchReviews();
       fetchStats();
@@ -190,7 +196,7 @@ const AdminDashboard = () => {
     if (!window.confirm('Are you sure you want to delete this review?')) return;
     
     try {
-      await axios.delete(`${API}/reviews/${reviewId}`);
+      await axios.delete(`${API}/reviews/${reviewId}`, getAuthHeaders());
       toast.success('Review deleted');
       fetchReviews();
       fetchStats();
