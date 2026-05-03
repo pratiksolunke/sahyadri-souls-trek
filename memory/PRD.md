@@ -36,17 +36,20 @@ Build a complete website named Sahyadri Souls Trek for a trekking company based 
 - About Us and Contact pages
 - Database seeded with 6 Maharashtra treks + 6 reviews
 - Backend auth middleware on all admin endpoints
+- **Image Upload** from admin panel via Emergent Object Storage (max 5MB, image types only)
+- **Departure Date Selection** - admins set dates, customers pick from dropdown when booking
+- **Email Confirmations** via Resend - beautiful HTML booking receipt sent on payment success
+- Reply-to set to sahyadri.souls@gmail.com so customer replies reach you
 
 ## Prioritized Backlog
 ### P0 (Critical for launch)
 - Add real Razorpay API keys (user action required)
-- Configure email service (SendGrid/Resend) for booking confirmations
+- Verify custom domain on Resend for branded emails (currently using onboarding@resend.dev)
 
 ### P1 (High priority)
-- Trek date selection in booking
-- Trek availability/calendar management
-- Email confirmation after successful booking
-- Image upload for admin (currently using URLs)
+- Trek availability/slots tracking (remaining spots per date)
+- Cancellation/refund policy and flow
+- SMS notifications via Twilio
 
 ### P2 (Nice to have)
 - SEO optimization (meta tags, Open Graph)
@@ -58,6 +61,6 @@ Build a complete website named Sahyadri Souls Trek for a trekking company based 
 
 ## Next Tasks
 1. User needs to provide Razorpay API keys for live payments
-2. Set up email service (Resend/SendGrid) for confirmations
-3. Add trek date selection and availability calendar
-4. Add image upload functionality for admin
+2. Verify custom domain on Resend for professional sender address
+3. Add trek slot/availability tracking
+4. Add cancellation/refund flow

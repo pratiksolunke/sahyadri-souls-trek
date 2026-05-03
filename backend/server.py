@@ -34,6 +34,7 @@ except Exception:
 # Resend email setup
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+REPLY_TO_EMAIL = os.environ.get('REPLY_TO_EMAIL', 'sahyadri.souls@gmail.com')
 
 # Object Storage setup
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
@@ -238,6 +239,7 @@ async def send_booking_confirmation_email(booking_data: dict):
         params = {
             "from": f"Sahyadri Souls Trek <{SENDER_EMAIL}>",
             "to": [booking_data['customer_email']],
+            "reply_to": REPLY_TO_EMAIL,
             "subject": f"Booking Confirmed - {booking_data['trek_name']} | Sahyadri Souls Trek",
             "html": html_content
         }
@@ -522,9 +524,10 @@ async def send_test_email(token: str = Depends(verify_admin)):
     try:
         params = {
             "from": f"Sahyadri Souls Trek <{SENDER_EMAIL}>",
-            "to": [SENDER_EMAIL],
+            "to": [REPLY_TO_EMAIL],
+            "reply_to": REPLY_TO_EMAIL,
             "subject": "Test Email - Sahyadri Souls Trek",
-            "html": "<h1>Email Setup Working!</h1><p>Your booking confirmation emails are ready.</p>"
+            "html": "<h1>Email Setup Working!</h1><p>Your booking confirmation emails are ready to go.</p>"
         }
         email = await asyncio.to_thread(resend.Emails.send, params)
         return {"status": "success", "email_id": email.get("id")}
