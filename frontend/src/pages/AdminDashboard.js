@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Check, X, TrendingUp, Users, Mountain, DollarSign, LogOut, Upload, Calendar, Image } from 'lucide-react';
+import { Plus, Edit, Trash2, Check, X, TrendingUp, Users, Mountain, DollarSign, LogOut, Upload, Calendar, Image, Tag, ToggleLeft, ToggleRight } from 'lucide-react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -20,7 +20,9 @@ const AdminDashboard = () => {
   const [treks, setTreks] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [coupons, setCoupons] = useState([]);
   const [isAddTrekOpen, setIsAddTrekOpen] = useState(false);
+  const [isAddCouponOpen, setIsAddCouponOpen] = useState(false);
   const [editingTrek, setEditingTrek] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
@@ -40,6 +42,15 @@ const AdminDashboard = () => {
     departure_dates: '',
   });
 
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    discount_type: 'percentage',
+    discount_value: '',
+    min_amount: '0',
+    max_uses: '100',
+    valid_until: '',
+  });
+
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
     if (!token) {
@@ -51,6 +62,7 @@ const AdminDashboard = () => {
     fetchTreks();
     fetchBookings();
     fetchReviews();
+    fetchCoupons();
   }, []);
 
   const getAuthHeaders = () => ({
@@ -92,6 +104,15 @@ const AdminDashboard = () => {
       setReviews(response.data);
     } catch (error) {
       console.error('Error fetching reviews:', error);
+    }
+  };
+
+  const fetchCoupons = async () => {
+    try {
+      const response = await axios.get(`${API}/coupons`, getAuthHeaders());
+      setCoupons(response.data);
+    } catch (error) {
+      console.error('Error fetching coupons:', error);
     }
   };
 
@@ -248,6 +269,47 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleAddCoupon = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/coupons`, {
+        code: couponForm.code.toUpperCase(),
+        discount_type: couponForm.discount_type,
+        discount_value: parseInt(couponForm.discount_value),
+        min_amount: parseInt(couponForm.min_amount) || 0,
+        max_uses: parseInt(couponForm.max_uses) || 100,
+        valid_until: couponForm.valid_until || null,
+      }, getAuthHeaders());
+      toast.success('Coupon created successfully');
+      setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_amount: '0', max_uses: '100', valid_until: '' });
+      setIsAddCouponOpen(false);
+      fetchCoupons();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create coupon');
+    }
+  };
+
+  const handleToggleCoupon = async (couponId) => {
+    try {
+      await axios.put(`${API}/coupons/${couponId}/toggle`, {}, getAuthHeaders());
+      toast.success('Coupon status updated');
+      fetchCoupons();
+    } catch (error) {
+      toast.error('Failed to update coupon');
+    }
+  };
+
+  const handleDeleteCoupon = async (couponId) => {
+    if (!window.confirm('Are you sure you want to delete this coupon?')) return;
+    try {
+      await axios.delete(`${API}/coupons/${couponId}`, getAuthHeaders());
+      toast.success('Coupon deleted');
+      fetchCoupons();
+    } catch (error) {
+      toast.error('Failed to delete coupon');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-24">
@@ -309,6 +371,7 @@ const AdminDashboard = () => {
           <TabsList className="mb-8">
             <TabsTrigger value="treks" data-testid="tab-treks">Treks</TabsTrigger>
             <TabsTrigger value="bookings" data-testid="tab-bookings">Bookings</TabsTrigger>
+            <TabsTrigger value="coupons" data-testid="tab-coupons">Coupons</TabsTrigger>
             <TabsTrigger value="reviews" data-testid="tab-reviews">Reviews</TabsTrigger>
           </TabsList>
 
@@ -621,6 +684,156 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </TabsContent>
+
+
+          {/* Coupons Tab */}
+          <TabsContent value="coupons">
+            <div className="bg-white border border-border rounded-md p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">Manage Coupons</h2>
+                <Dialog open={isAddCouponOpen} onOpenChange={setIsAddCouponOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary hover:bg-primary-hover" data-testid="add-coupon-button">
+                      <Plus className="mr-2" size={18} />
+                      Add Coupon
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Create New Coupon</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleAddCoupon} className="space-y-4">
+                      <div>
+                        <Label>Coupon Code *</Label>
+                        <Input
+                          value={couponForm.code}
+                          onChange={(e) => setCouponForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                          placeholder="e.g., TREK20"
+                          required
+                          data-testid="coupon-form-code"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Discount Type *</Label>
+                          <Select
+                            value={couponForm.discount_type}
+                            onValueChange={(value) => setCouponForm(prev => ({ ...prev, discount_type: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">Percentage (%)</SelectItem>
+                              <SelectItem value="flat">Flat Amount (₹)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Discount Value *</Label>
+                          <Input
+                            type="number"
+                            value={couponForm.discount_value}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, discount_value: e.target.value }))}
+                            placeholder={couponForm.discount_type === 'percentage' ? 'e.g., 10' : 'e.g., 200'}
+                            required
+                            data-testid="coupon-form-value"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Min. Booking Amount (₹)</Label>
+                          <Input
+                            type="number"
+                            value={couponForm.min_amount}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, min_amount: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label>Max Uses</Label>
+                          <Input
+                            type="number"
+                            value={couponForm.max_uses}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, max_uses: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Valid Until (optional)</Label>
+                        <Input
+                          type="date"
+                          value={couponForm.valid_until}
+                          onChange={(e) => setCouponForm(prev => ({ ...prev, valid_until: e.target.value }))}
+                          data-testid="coupon-form-expiry"
+                        />
+                      </div>
+
+                      <Button type="submit" className="w-full bg-primary hover:bg-primary-hover" data-testid="save-coupon-button">
+                        Create Coupon
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {coupons.length === 0 ? (
+                <p className="text-text-muted text-center py-8">No coupons created yet. Click "Add Coupon" to get started.</p>
+              ) : (
+                <div className="space-y-4">
+                  {coupons.map((coupon) => (
+                    <div
+                      key={coupon.id}
+                      className={`border rounded-md p-4 flex items-center justify-between ${coupon.is_active ? 'border-green-200 bg-green-50/50' : 'border-border bg-gray-50'}`}
+                      data-testid="coupon-item"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-md">
+                          <Tag className="text-primary" size={20} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-lg font-mono">{coupon.code}</h3>
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${coupon.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'}`}>
+                              {coupon.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-text-muted">
+                            {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% off` : `₹${coupon.discount_value} off`}
+                            {coupon.min_amount > 0 && ` • Min ₹${coupon.min_amount}`}
+                            {` • Used ${coupon.used_count}/${coupon.max_uses}`}
+                            {coupon.valid_until && ` • Expires ${coupon.valid_until}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleCoupon(coupon.id)}
+                          data-testid={`toggle-coupon-${coupon.id}`}
+                          title={coupon.is_active ? 'Deactivate' : 'Activate'}
+                        >
+                          {coupon.is_active ? <ToggleRight size={16} className="text-green-600" /> : <ToggleLeft size={16} />}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteCoupon(coupon.id)}
+                          data-testid={`delete-coupon-${coupon.id}`}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
 

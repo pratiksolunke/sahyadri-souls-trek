@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 3 - Coupon system E2E test. Backend pytest: 19/19 passed (100%). All coupon endpoints working: POST/GET /api/coupons (admin-protected, 401 without token), PUT /api/coupons/{id}/toggle, DELETE /api/coupons/{id}, POST /api/coupons/apply (public). Discount math verified (20% of 1000 = 200; flat ₹200 works). Validation: expired coupon -> 400 'expired'; max_uses=0 -> 400 'limit'; below min_amount -> 400 'Minimum'; invalid code -> 404; duplicate code -> 400; inactive coupon -> 404. Codes are case-normalized to uppercase on create and apply. Booking create-order accepts discount_amount & coupon_code and persists them. Frontend: Admin dashboard Coupons tab lists seeded coupons (TREK20, FLAT200), creating & deleting UITEST coupon works end-to-end via UI. Trek detail booking form: coupon input + Apply button visible, invalid code shows no badge, valid code shows green applied-badge '<code> -₹<discount> off', discount-line visible in price breakdown, Remove button restores input. ONE SEED-DATA ISSUE: TREK20 and FLAT200 are stored with is_active=false in DB, so customers cannot actually use them via /api/coupons/apply until admin toggles them active. Tests activate them on the fly and restore afterwards.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/coupons (seed)", "issue": "Seeded coupons TREK20 and FLAT200 were inserted with is_active=false. As-is, apply returns 404 'Invalid or expired coupon code' for both. Admin must toggle them active before they are usable. Consider seeding with is_active=true or adding a migration/seed fix."},
+      {"endpoint": "/api/coupons/apply", "issue": "Currently returns same 404 'Invalid or expired coupon code' for (a) code that does not exist AND (b) code that exists but is inactive. Consider a distinct message for inactive coupons for better admin UX."},
+      {"endpoint": "/api/bookings/create-order", "issue": "used_count is incremented only in verify-payment (post-payment) - not on order creation, which is correct, but means Razorpay-mocked path currently never increments used_count unless verify-payment completes with the mock signature. Worth documenting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Create Coupon Dialog", "issues": ["Dialog missing aria-describedby (Radix warning in console): 'Missing Description or aria-describedby={undefined} for DialogContent'. Accessibility warning only, no functional impact."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_coupons.py", "/app/test_reports/pytest/coupons_results.xml"],
+  "action_items": [
+    "Fix seed script / DB to set is_active=true for TREK20 and FLAT200 (or admin should toggle them active). Currently customers will see 'Invalid or expired coupon code' for the advertised test codes.",
+    "(Minor) Add aria-describedby/Description to coupon create DialogContent to silence Radix a11y warning.",
+    "(Minor) Return a clearer error ('Coupon inactive') for inactive-but-existing codes instead of generic 404."
+  ],
+  "critical_code_review_comments": [
+    "apply_coupon: query `find_one({'code': code, 'is_active': True})` - this conflates 'doesn't exist' with 'inactive'. Admin UX would benefit from distinct handling.",
+    "Coupon.valid_until is typed as Optional[str] but parsed with strptime('%Y-%m-%d') without guarding against malformed strings; will raise 500 if a bad string slips in. Consider validating on create with Pydantic validator.",
+    "min_amount and discount_value are ints; no validation that discount_value <= 100 for percentage or >0 for either. A percentage>100 would let discount=min(amount, computed)=amount which becomes free bookings. Add Pydantic field validators.",
+    "used_count increment happens in verify-payment only; if payment is initiated but never verified, coupon usage is not accounted. Consider reserving on create-order or using atomic increments with findOneAndUpdate to prevent over-use under race conditions.",
+    "No endpoint to fetch a single coupon by id (GET /api/coupons/{id}) - minor gap; list endpoint is fine for now.",
+    "Coupon codes are uppercased on create and apply - consistent, good.",
+    "All 5 admin-only coupon routes correctly use Depends(verify_admin). Security check: PASS."
+  ],
+  "updated_files": ["/app/backend/tests/test_coupons.py"],
+  "success_rate": {"backend": "100% (19/19 pytest)", "frontend": "100% (admin create+delete, list, toggle flow and customer apply/remove with discount-line verified)"},
+  "test_credentials": "admin / admin123 (verified). Coupons created for testing are all cleaned up; only pre-existing seed coupons TREK20, FLAT200 remain (state preserved - still is_active=false as before).",
+  "seed_data_creation": "No new permanent seed data. Test coupons created (TESTCPN*, EXPIRED*, MAXED*, INCR*, UIAPPLY*) were deleted at end of each test. Seeded coupons TREK20 and FLAT200 toggled active during tests then toggled back to original inactive state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Coupon system: 19 pytest tests at /app/backend/tests/test_coupons.py cover auth, CRUD, apply validation (min_amount, expired, max_uses, inactive, invalid), code case-insensitivity, and booking-with-coupon persistence. Frontend verified: admin dashboard Coupons tab (create/delete works), TrekDetailPage coupon input + Apply + applied-badge + discount-line + Remove all functional. KEY DATA NOTE: TREK20 & FLAT200 are is_active=false in DB - either activate them or tell customers to use admin-created coupons.",
+  "rca_of_the_issue": "TREK20/FLAT200 apply 404 RCA: apply_coupon filters coupons by {code, is_active: True}; seed insert set is_active=False so the find_one misses and returns 404 'Invalid or expired coupon code'. Fix: either update seed data to is_active=true, or remove the is_active filter from find_one and return a distinct 'Coupon is inactive' error when is_active=False."
+}

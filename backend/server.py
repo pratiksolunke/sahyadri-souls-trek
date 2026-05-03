@@ -128,6 +128,8 @@ class Booking(BaseModel):
     age: int
     num_members: int
     total_amount: int
+    discount_amount: int = 0
+    coupon_code: Optional[str] = None
     departure_date: Optional[str] = None
     payment_status: str = "pending"
     razorpay_order_id: Optional[str] = None
@@ -143,6 +145,8 @@ class BookingCreate(BaseModel):
     age: int
     num_members: int
     total_amount: int
+    discount_amount: int = 0
+    coupon_code: Optional[str] = None
     departure_date: Optional[str] = None
 
 class Review(BaseModel):
@@ -170,6 +174,32 @@ class PaymentVerification(BaseModel):
     razorpay_payment_id: str
     razorpay_signature: str
     booking_id: str
+
+# Coupon Models
+class Coupon(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    code: str
+    discount_type: str  # "percentage" or "flat"
+    discount_value: int  # percentage (e.g., 10) or flat amount (e.g., 200)
+    min_amount: int = 0  # minimum booking amount to apply
+    max_uses: int = 100  # total usage limit
+    used_count: int = 0
+    is_active: bool = True
+    valid_until: Optional[str] = None  # YYYY-MM-DD or null for no expiry
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CouponCreate(BaseModel):
+    code: str
+    discount_type: str
+    discount_value: int
+    min_amount: int = 0
+    max_uses: int = 100
+    valid_until: Optional[str] = None
+
+class CouponApply(BaseModel):
+    code: str
+    amount: int
 
 # Email helper
 async def send_booking_confirmation_email(booking_data: dict):
@@ -383,6 +413,13 @@ async def create_order(booking_input: BookingCreate):
     doc['booking_date'] = doc['booking_date'].isoformat()
     await db.bookings.insert_one(doc)
     
+    # Increment coupon usage if applied
+    if booking_obj.coupon_code:
+        await db.coupons.update_one(
+            {"code": booking_obj.coupon_code},
+            {"$inc": {"used_count": 1}}
+        )
+    
     return {
         "booking_id": booking_obj.id,
         "order_id": booking_obj.razorpay_order_id,
@@ -486,6 +523,91 @@ async def delete_review(review_id: str, token: str = Depends(verify_admin)):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Review not found")
     return {"message": "Review deleted successfully"}
+
+# Coupon Routes
+@api_router.post("/coupons", response_model=Coupon)
+async def create_coupon(coupon_input: CouponCreate, token: str = Depends(verify_admin)):
+    # Check if code already exists
+    existing = await db.coupons.find_one({"code": coupon_input.code.upper()}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Coupon code already exists")
+    
+    coupon_dict = coupon_input.model_dump()
+    coupon_dict['code'] = coupon_dict['code'].upper()
+    coupon_obj = Coupon(**coupon_dict)
+    doc = coupon_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.coupons.insert_one(doc)
+    return coupon_obj
+
+@api_router.get("/coupons", response_model=List[Coupon])
+async def get_coupons(token: str = Depends(verify_admin)):
+    coupons = await db.coupons.find({}, {"_id": 0}).to_list(100)
+    for coupon in coupons:
+        if isinstance(coupon.get('created_at'), str):
+            coupon['created_at'] = datetime.fromisoformat(coupon['created_at'])
+    return coupons
+
+@api_router.put("/coupons/{coupon_id}/toggle")
+async def toggle_coupon(coupon_id: str, token: str = Depends(verify_admin)):
+    coupon = await db.coupons.find_one({"id": coupon_id}, {"_id": 0})
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+    
+    new_status = not coupon.get('is_active', True)
+    await db.coupons.update_one(
+        {"id": coupon_id},
+        {"$set": {"is_active": new_status}}
+    )
+    return {"message": f"Coupon {'activated' if new_status else 'deactivated'}", "is_active": new_status}
+
+@api_router.delete("/coupons/{coupon_id}")
+async def delete_coupon(coupon_id: str, token: str = Depends(verify_admin)):
+    result = await db.coupons.delete_one({"id": coupon_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+    return {"message": "Coupon deleted successfully"}
+
+@api_router.post("/coupons/apply")
+async def apply_coupon(coupon_data: CouponApply):
+    code = coupon_data.code.upper().strip()
+    coupon = await db.coupons.find_one({"code": code, "is_active": True}, {"_id": 0})
+    
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Invalid or expired coupon code")
+    
+    # Check usage limit
+    if coupon.get('used_count', 0) >= coupon.get('max_uses', 100):
+        raise HTTPException(status_code=400, detail="Coupon usage limit reached")
+    
+    # Check expiry
+    if coupon.get('valid_until'):
+        expiry = datetime.strptime(coupon['valid_until'], '%Y-%m-%d').date()
+        if datetime.now(timezone.utc).date() > expiry:
+            raise HTTPException(status_code=400, detail="Coupon has expired")
+    
+    # Check minimum amount
+    if coupon_data.amount < coupon.get('min_amount', 0):
+        raise HTTPException(status_code=400, detail=f"Minimum booking amount of ₹{coupon['min_amount']} required")
+    
+    # Calculate discount
+    if coupon['discount_type'] == 'percentage':
+        discount = int(coupon_data.amount * coupon['discount_value'] / 100)
+    else:
+        discount = coupon['discount_value']
+    
+    # Ensure discount doesn't exceed total
+    discount = min(discount, coupon_data.amount)
+    
+    return {
+        "valid": True,
+        "code": code,
+        "discount_type": coupon['discount_type'],
+        "discount_value": coupon['discount_value'],
+        "discount_amount": discount,
+        "final_amount": coupon_data.amount - discount,
+        "message": f"Coupon applied! You save ₹{discount}"
+    }
 
 # Admin Route
 @api_router.post("/admin/login")

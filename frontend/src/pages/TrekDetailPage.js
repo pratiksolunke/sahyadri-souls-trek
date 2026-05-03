@@ -29,6 +29,9 @@ const TrekDetailPage = () => {
     num_members: 1,
     departure_date: '',
   });
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplied, setCouponApplied] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
 
   useEffect(() => {
     fetchTrek();
@@ -61,6 +64,39 @@ const TrekDetailPage = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setBookingData(prev => ({ ...prev, [name]: value }));
+    // Reset coupon when members change (since amount changes)
+    if (name === 'num_members') {
+      setCouponApplied(null);
+      setCouponCode('');
+    }
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      toast.error('Please enter a coupon code');
+      return;
+    }
+    
+    setCouponLoading(true);
+    try {
+      const amount = trek.price * bookingData.num_members;
+      const response = await axios.post(`${API}/coupons/apply`, {
+        code: couponCode.trim(),
+        amount: amount,
+      });
+      setCouponApplied(response.data);
+      toast.success(response.data.message);
+    } catch (error) {
+      setCouponApplied(null);
+      toast.error(error.response?.data?.detail || 'Invalid coupon code');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponApplied(null);
+    setCouponCode('');
   };
 
   const handleBooking = async (e) => {
@@ -74,7 +110,9 @@ const TrekDetailPage = () => {
     setBookingLoading(true);
     
     try {
-      const total_amount = trek.price * bookingData.num_members;
+      const baseAmount = trek.price * bookingData.num_members;
+      const discountAmount = couponApplied ? couponApplied.discount_amount : 0;
+      const total_amount = baseAmount - discountAmount;
       
       const response = await axios.post(`${API}/bookings/create-order`, {
         trek_id: trek.id,
@@ -85,6 +123,8 @@ const TrekDetailPage = () => {
         age: parseInt(bookingData.age),
         num_members: parseInt(bookingData.num_members),
         total_amount: total_amount,
+        discount_amount: discountAmount,
+        coupon_code: couponApplied ? couponApplied.code : null,
         departure_date: bookingData.departure_date || null,
       });
 
@@ -149,7 +189,9 @@ const TrekDetailPage = () => {
 
   if (!trek) return null;
 
-  const totalAmount = trek.price * bookingData.num_members;
+  const baseAmount = trek.price * bookingData.num_members;
+  const discountAmount = couponApplied ? couponApplied.discount_amount : 0;
+  const totalAmount = baseAmount - discountAmount;
 
   return (
     <div className="min-h-screen py-12">
@@ -437,7 +479,62 @@ const TrekDetailPage = () => {
                   </div>
 
                   <div className="border-t border-border mt-6 pt-6">
-                    <div className="flex justify-between items-center mb-6">
+                    {/* Coupon Code */}
+                    <div className="mb-4">
+                      <Label className="text-sm font-medium">Have a coupon code?</Label>
+                      {couponApplied ? (
+                        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-4 py-3 mt-2" data-testid="coupon-applied-badge">
+                          <div>
+                            <span className="font-semibold text-green-800">{couponApplied.code}</span>
+                            <span className="text-sm text-green-600 ml-2">-₹{couponApplied.discount_amount} off</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveCoupon}
+                            className="text-red-500 hover:text-red-700 text-sm font-medium"
+                            data-testid="remove-coupon-button"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 mt-2">
+                          <Input
+                            placeholder="Enter coupon code"
+                            value={couponCode}
+                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                            className="flex-1"
+                            data-testid="input-coupon"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleApplyCoupon}
+                            disabled={couponLoading}
+                            className="shrink-0"
+                            data-testid="apply-coupon-button"
+                          >
+                            {couponLoading ? '...' : 'Apply'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Price Breakdown */}
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between text-sm text-text-muted">
+                        <span>₹{trek.price} x {bookingData.num_members} member(s)</span>
+                        <span>₹{baseAmount}</span>
+                      </div>
+                      {couponApplied && (
+                        <div className="flex justify-between text-sm text-green-600" data-testid="discount-line">
+                          <span>Discount ({couponApplied.code})</span>
+                          <span>-₹{discountAmount}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center mb-6 border-t border-border pt-4">
                       <span className="text-lg font-semibold">Total Amount</span>
                       <span className="text-2xl font-bold text-primary" data-testid="total-amount">
                         ₹{totalAmount}
