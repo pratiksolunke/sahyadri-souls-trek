@@ -5,6 +5,7 @@ import { MapPin, Clock, Users, Check, X, Star, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -32,6 +33,8 @@ const TrekDetailPage = () => {
   const [couponCode, setCouponCode] = useState('');
   const [couponApplied, setCouponApplied] = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ customer_name: '', rating: 5, comment: '' });
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
     fetchTrek();
@@ -97,6 +100,29 @@ const TrekDetailPage = () => {
   const handleRemoveCoupon = () => {
     setCouponApplied(null);
     setCouponCode('');
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewForm.customer_name || !reviewForm.comment) {
+      toast.error('Please fill in your name and review');
+      return;
+    }
+    setReviewSubmitting(true);
+    try {
+      await axios.post(`${API}/reviews`, {
+        trek_id: trekId,
+        customer_name: reviewForm.customer_name,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment,
+      });
+      toast.success('Thank you! Your review has been submitted and will appear after approval.');
+      setReviewForm({ customer_name: '', rating: 5, comment: '' });
+    } catch (error) {
+      toast.error('Failed to submit review. Please try again.');
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   const handleBooking = async (e) => {
@@ -365,6 +391,63 @@ const TrekDetailPage = () => {
                   </div>
                 </div>
               )}
+
+              {/* Write a Review */}
+              <div className="bg-white border border-border rounded-md p-6" data-testid="write-review-section">
+                <h2 className="text-2xl font-semibold mb-4">Write a Review</h2>
+                <p className="text-sm text-text-muted mb-4">Share your experience with other trekkers. Reviews will be visible after admin approval.</p>
+                <form onSubmit={handleSubmitReview} className="space-y-4">
+                  <div>
+                    <Label htmlFor="review_name">Your Name *</Label>
+                    <Input
+                      id="review_name"
+                      value={reviewForm.customer_name}
+                      onChange={(e) => setReviewForm(prev => ({ ...prev, customer_name: e.target.value }))}
+                      required
+                      data-testid="review-input-name"
+                    />
+                  </div>
+                  <div>
+                    <Label>Rating *</Label>
+                    <div className="flex gap-2 mt-2" data-testid="review-rating-stars">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setReviewForm(prev => ({ ...prev, rating: star }))}
+                          className="transition-transform hover:scale-125"
+                          data-testid={`review-star-${star}`}
+                        >
+                          <Star
+                            size={28}
+                            className={star <= reviewForm.rating ? 'fill-primary text-primary' : 'text-gray-300'}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="review_comment">Your Review *</Label>
+                    <Textarea
+                      id="review_comment"
+                      rows={4}
+                      placeholder="Tell us about your experience on this trek..."
+                      value={reviewForm.comment}
+                      onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
+                      required
+                      data-testid="review-input-comment"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="bg-primary hover:bg-primary-hover text-white"
+                    disabled={reviewSubmitting}
+                    data-testid="submit-review-button"
+                  >
+                    {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                  </Button>
+                </form>
+              </div>
             </motion.div>
           </div>
 

@@ -16,6 +16,7 @@ const API = `${BACKEND_URL}/api`;
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [stats, setStats] = useState(null);
   const [treks, setTreks] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -58,11 +59,20 @@ const AdminDashboard = () => {
       return;
     }
     
-    fetchStats();
-    fetchTreks();
-    fetchBookings();
-    fetchReviews();
-    fetchCoupons();
+    // Validate token with server
+    axios.get(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(() => {
+        setIsAuthenticated(true);
+        fetchStats();
+        fetchTreks();
+        fetchBookings();
+        fetchReviews();
+        fetchCoupons();
+      })
+      .catch(() => {
+        localStorage.removeItem('admin_token');
+        navigate('/admin/login');
+      });
   }, []);
 
   const getAuthHeaders = () => ({
@@ -309,6 +319,17 @@ const AdminDashboard = () => {
       toast.error('Failed to delete coupon');
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="mt-4 text-text-muted">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background py-8">

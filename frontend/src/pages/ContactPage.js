@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Phone, Mail, Send } from 'lucide-react';
+import { MapPin, Phone, Mail, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,6 @@ const ContactPage = () => {
     phone: '',
     message: '',
   });
-  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -23,14 +22,19 @@ const ContactPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
     
-    // Simulate form submission
-    setTimeout(() => {
-      toast.success('Message sent successfully! We\'ll get back to you soon.');
-      setFormData({ name: '', email: '', phone: '', message: '' });
-      setSubmitting(false);
-    }, 1000);
+    if (!formData.name || !formData.message) {
+      toast.error('Please fill in your name and message');
+      return;
+    }
+    
+    // Send message directly via WhatsApp
+    const whatsappMessage = `Hi Sahyadri Souls Trek!\n\nName: ${formData.name}\nEmail: ${formData.email}\nPhone: ${formData.phone}\n\nMessage: ${formData.message}`;
+    const whatsappUrl = `https://wa.me/917588917768?text=${encodeURIComponent(whatsappMessage)}`;
+    window.open(whatsappUrl, '_blank');
+    
+    toast.success('Redirecting to WhatsApp...');
+    setFormData({ name: '', email: '', phone: '', message: '' });
   };
 
   const contactInfo = [
@@ -48,8 +52,8 @@ const ContactPage = () => {
     {
       icon: Mail,
       title: 'Email Us',
-      content: 'info@sahyadrisouls.com',
-      link: 'mailto:info@sahyadrisouls.com',
+      content: 'sahyadri.souls@gmail.com',
+      link: 'mailto:sahyadri.souls@gmail.com',
     },
   ];
 
@@ -195,16 +199,11 @@ const ContactPage = () => {
 
                     <Button
                       type="submit"
-                      className="w-full bg-primary hover:bg-primary-hover text-white py-6 rounded-md"
-                      disabled={submitting}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white py-6 rounded-md"
                       data-testid="submit-button"
                     >
-                      {submitting ? 'Sending...' : (
-                        <>
-                          <Send className="mr-2" size={20} />
-                          Send Message
-                        </>
-                      )}
+                      <MessageCircle className="mr-2" size={20} />
+                      Send via WhatsApp
                     </Button>
                   </div>
                 </form>

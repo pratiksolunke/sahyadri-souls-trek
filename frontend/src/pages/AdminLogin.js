@@ -103,7 +103,7 @@ const AdminLogin = () => {
           </form>
 
           <div className="mt-6 text-center text-sm text-text-muted">
-            <p>Demo credentials: admin / admin123</p>
+            <p>Contact administrator for access</p>
           </div>
         </div>
       </motion.div>
